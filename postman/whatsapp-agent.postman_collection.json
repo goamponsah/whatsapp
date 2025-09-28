@@ -1,0 +1,148 @@
+{
+  "info": {
+    "name": "WhatsApp Agent Scaffold",
+    "_postman_id": "b6c2b0c0-0000-4a4a-9999-123456789abc",
+    "description": "Test endpoints for WhatsApp Agent scaffold",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/health",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "WhatsApp Verify (GET)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token={{META_VERIFY_TOKEN}}&hub.challenge=12345",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "webhooks",
+            "whatsapp"
+          ],
+          "query": [
+            {
+              "key": "hub.mode",
+              "value": "subscribe"
+            },
+            {
+              "key": "hub.verify_token",
+              "value": "{{META_VERIFY_TOKEN}}"
+            },
+            {
+              "key": "hub.challenge",
+              "value": "12345"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Admin: Create Tenant",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\": \"Demo Hotel\", \"whatsapp_number\": \"+233555000111\"}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/admin/tenants",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "admin",
+            "tenants"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Admin: Upload FAQ",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"tenant_id\": \"<replace>\", \"title\": \"Prices\", \"content\": \"Our price for standard room is GHS 250. We are open 8am-8pm daily.\"}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/admin/faqs/upload",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "admin",
+            "faqs",
+            "upload"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Admin: List FAQs",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/admin/faqs?tenant_id=<replace>",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "admin",
+            "faqs"
+          ],
+          "query": [
+            {
+              "key": "tenant_id",
+              "value": "<replace>"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
