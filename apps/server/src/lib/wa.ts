@@ -57,15 +57,19 @@ async function sendViaTwilio(to: string, text: string) {
 
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
     method: 'POST',
-    headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
     body: params
-  } as any);
+  });
 
-  if (!('ok' in res) or (res as any).status >= 300) {
-    const body = await (res as any).text();
-    throw new Error('WA(Twilio) send error: ' + body);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`WA(Twilio) send error ${res.status}: ${body}`);
   }
 }
+
 
 // --- Sendchamp (placeholder) ---
 async function sendViaSendchamp(to: string, text: string) {
