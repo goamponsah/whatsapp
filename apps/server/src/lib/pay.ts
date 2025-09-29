@@ -43,6 +43,6 @@ export function verifyPaystackSignature(req: FastifyRequest): boolean {
     const hash = crypto.createHmac('sha512', secret).update(rawBody, 'utf8').digest('hex');
     return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(sig));
   } catch {
-    return False;
+    return false;
   }
 }
