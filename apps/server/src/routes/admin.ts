@@ -220,9 +220,9 @@ export async function adminRoutes(app: FastifyInstance) {
       for (const b of bookings) {
         const bStart = new Date(b.start_time);
         const bEnd = new Date(b.end_time);
-        if (overlap(sStart, sEnd, bStart, bEnd)) return False;
+        if (overlap(sStart, sEnd, bStart, bEnd)) return false;
       }
-      return True;
+      return true;
     });
 
     reply.send(slots);
