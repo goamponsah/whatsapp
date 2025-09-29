@@ -76,7 +76,7 @@ async function sendViaSendchamp(to: string, text: string) {
   const key = process.env.SENDCHAMP_API_KEY;
   const sender = process.env.SENDCHAMP_SENDER;
   if (!key || !sender) throw new Error('Missing Sendchamp config');
-  // Basic SMS/WhatsApp messaging - adjust endpoint if you have WhatsApp-specific plan
+
   const res = await fetch('https://api.sendchamp.com/api/v1/message/send', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -84,12 +84,13 @@ async function sendViaSendchamp(to: string, text: string) {
       to: [to],
       message: text,
       sender_name: sender,
-      route: 'dnd' // adjust per account capabilities
+      route: 'dnd'
     })
-  } as any);
-  const status = (res as any).status || 0;
-  if (status >= 300) {
-    const body = await (res as any).text();
-    throw new Error('WA(Sendchamp) send error: ' + body);
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`WA(Sendchamp) send error ${res.status}: ${body}`);
   }
 }
+
