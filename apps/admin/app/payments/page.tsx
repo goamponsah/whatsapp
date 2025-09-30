@@ -1,44 +1,39 @@
 'use client';
 import { useState } from 'react';
+
 const SERVER = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8080';
 const AUTH = (process.env.NEXT_PUBLIC_ADMIN_TOKEN && `Bearer ${process.env.NEXT_PUBLIC_ADMIN_TOKEN}`) || '';
 
 export default function Payments() {
-  const [email, setEmail] = useState('customer@example.com');
-  const [amount, setAmount] = useState(1000); // kobo/pesewas: adjust per currency
-  const [meta, setMeta] = useState('{"purpose":"booking","note":"demo"}');
-  const [resp, setResp] = useState<any>(null);
-  const [err, setErr] = useState('');
+  const [email, setEmail] = useState('');
+  const [amount, setAmount] = useState<number>(10000); // in pesewas/kobo
+  const [result, setResult] = useState<any>(null);
 
   async function createLink() {
-    try {
-      const res = await fetch(`${SERVER}/admin/payments/initiate`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ email, amount, metadata: JSON.parse(meta`, { headers: AUTH ? { 'Authorization': AUTH } : undefined }) })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'failed');
-      setResp(data);
-      setErr('');
-    } catch (e:any) {
-      setErr(e.message);
-      setResp(null);
-    }
+    const res = await fetch(`${SERVER}/admin/payments/initiate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(AUTH ? { Authorization: AUTH } : {}) },
+      body: JSON.stringify({ email, amount }),
+    });
+    const data = await res.json();
+    setResult(data);
   }
 
   return (
-    <div>
-      <h1>Paystack Link (Test)</h1>
-      <div style={{ display:'grid', gap:8, maxWidth:520 }}>
-        <input placeholder="Customer email" value={email} onChange={e=>setEmail(e.target.value)} />
-        <input type="number" placeholder="Amount (e.g., GHS in pesewas)" value={amount} onChange={e=>setAmount(Number(e.target.value))} />
-        <textarea rows={4} value={meta} onChange={e=>setMeta(e.target.value)} />
+    <div style={{ padding: 16 }}>
+      <h1>Payments</h1>
+      <div style={{ display: 'grid', gap: 8, maxWidth: 480 }}>
+        <input placeholder="Customer Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} />
         <button onClick={createLink}>Create Payment Link</button>
-        {err && <p style={{color:'crimson'}}>{err}</p>}
-        {resp && <p>Link: <a href={resp.url} target="_blank">{resp.url}</a><br/>Ref: {resp.reference}</p>}
       </div>
-      <p style={{marginTop:12,fontSize:12,opacity:0.8}}>Note: Ensure PAYSTACK_SECRET_KEY is set in server .env. Amount unit depends on currency settings (kobo/pesewas).</p>
+
+      {result && (
+        <div style={{ marginTop: 16 }}>
+          <div><strong>Reference:</strong> {result.reference}</div>
+          <div><a href={result.url} target="_blank" rel="noreferrer">Open Payment Page</a></div>
+        </div>
+      )}
     </div>
   );
 }
