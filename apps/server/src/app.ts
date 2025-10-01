@@ -4,40 +4,36 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
 
-// If you have admin routes, we import and register them below
-// (make sure the compiled file will be at dist/src/routes/admin.js)
-import adminRoutes from './routes/admin.js';
+// If your routes file exports `export const adminRoutes = async (app)=>{...}`
+import { adminRoutes } from './routes/admin.js';
 
-// --- Fastify instance ---
-const app = Fastify({
-  logger: true
-});
+const app = Fastify({ logger: true });
 
-// --- CORS (open by default; tighten if needed) ---
-await app.register(cors, {
-  origin: true
-});
+// CORS (open; tighten origin if needed)
+app.register(cors, { origin: true });
 
-// --- URL-encoded form parser (for simple forms) ---
-await app.register(formbody);
+// x-www-form-urlencoded parser
+app.register(formbody);
 
-// --- Capture raw JSON body (needed for Paystack signature verify) ---
+// Capture raw JSON for Paystack HMAC verification
 app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
   try {
-    (req as any).rawBody = body || '';
-    const json = body ? JSON.parse(body) : {};
+    const raw = typeof body === 'string' ? body : Buffer.from(body as any).toString('utf8');
+    (req as any).rawBody = raw || '';
+    const json = raw ? JSON.parse(raw) : {};
     done(null, json);
   } catch (err) {
     done(err as Error, undefined as any);
   }
 });
 
-// --- Health check ---
-app.get('/health', async () => {
-  return { ok: true };
-});
+// Health
+app.get('/health', async () => ({ ok: true }));
 
-// --- WhatsApp webhook: verification (GET) ---
+// Optional friendly root so GET / doesn’t 404
+app.get('/', async () => ({ ok: true, service: 'whatsapp-agent-server', version: '0.1.0' }));
+
+// WhatsApp webhook verify (GET)
 app.get('/webhooks/whatsapp', async (req, reply) => {
   const q = (req.query ?? {}) as Record<string, string>;
   const mode = q['hub.mode'];
@@ -45,29 +41,25 @@ app.get('/webhooks/whatsapp', async (req, reply) => {
   const challenge = q['hub.challenge'];
 
   if (mode === 'subscribe' && token && challenge && token === process.env.META_VERIFY_TOKEN) {
-    // Meta expects the challenge echoed verbatim with 200
-    reply.code(200).type('text/plain').send(challenge);
-    return;
+    return reply.code(200).type('text/plain').send(challenge);
   }
-  reply.code(403).send('Forbidden');
+  return reply.code(403).send('Forbidden');
 });
 
-// --- WhatsApp webhook: events (POST) ---
+// WhatsApp events (POST)
 app.post('/webhooks/whatsapp', async (req, reply) => {
-  // You can process the payload here or enqueue it; for now we just log minimal info
-  app.log.info({ path: '/webhooks/whatsapp', body: req.body }, 'WA inbound');
-  reply.code(200).send({ ok: true });
+  app.log.info({ route: '/webhooks/whatsapp', body: req.body }, 'WA inbound');
+  return reply.send({ ok: true });
 });
 
-// --- Paystack webhook (optional example) ---
-// Keep this route if you’re verifying HMAC in lib/pay.ts using req.rawBody
+// Paystack webhook (HMAC verified using req.rawBody)
 app.post('/webhooks/paystack', async (req, reply) => {
   try {
     const { verifyPaystackSignature } = await import('./lib/pay.js');
     if (!verifyPaystackSignature(req)) {
       return reply.code(401).send({ ok: false, error: 'invalid signature' });
     }
-    // TODO: handle event (update bookings by paystack_ref, etc.)
+    // TODO: update booking/payment by paystack_ref here
     app.log.info({ evt: req.body }, 'Paystack webhook ok');
     return reply.send({ ok: true });
   } catch (e) {
@@ -76,24 +68,23 @@ app.post('/webhooks/paystack', async (req, reply) => {
   }
 });
 
-// --- Mount admin API under /admin (only if the file exists) ---
-await app.register(adminRoutes as any, { prefix: '/admin' });
+// Mount admin API under /admin
+app.register(adminRoutes as any, { prefix: '/admin' });
 
-// --- Optional: simple root route so / doesn’t 404 ---
-app.get('/', async () => {
-  return { ok: true, service: 'whatsapp-agent-server', version: '0.1.0' };
-});
-
-// --- Start server when executed directly ---
+// Boot
 const PORT = Number(process.env.PORT || 8080);
 const HOST = '0.0.0.0';
 
-try {
-  await app.listen({ port: PORT, host: HOST });
-  app.log.info(`Server listening on http://${HOST}:${PORT}`);
-} catch (err) {
-  app.log.error(err);
-  process.exit(1);
+async function start() {
+  try {
+    await app.listen({ port: PORT, host: HOST });
+    app.log.info(`Server listening on http://${HOST}:${PORT}`);
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
 }
+
+start();
 
 export default app;
