@@ -11,7 +11,6 @@
     "seed": "node dist/scripts/seed.js"
   },
   "dependencies": {
-    "dependencies": {
   "fastify": "^4.29.1",
   "@fastify/cors": "^8.3.0",
   "@fastify/jwt": "^7.2.0",
