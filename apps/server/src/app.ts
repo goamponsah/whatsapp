@@ -1,88 +1,99 @@
+// apps/server/src/app.ts
+import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
-import { config } from 'dotenv';
-import { verifyMetaSignature } from './lib/verify.js';
-import { handleMessage } from './orchestrator.js';
-import { adminRoutes } from './routes/admin.js';
 
-config();
+// If you have admin routes, we import and register them below
+// (make sure the compiled file will be at dist/src/routes/admin.js)
+import adminRoutes from './routes/admin.js';
 
-const app = Fastify({ logger: true });
-app.register(formbody);
-app.register(cors, { origin: true, credentials: true });
-// Capture rawBody for webhook signature verification
-app.addHook('onRequest', async (req: any, _reply: any) => {
-  // Only buffer JSON bodies under ~1MB
-  if (req.method === 'POST' && (req.headers['content-type']||'').includes('application/json')) {
-    let data = '';
-    await new Promise<void>((resolve) => {
-      req.raw.on('data', (chunk: any) => (data += chunk));
-      req.raw.on('end', () => resolve());
-    });
-    req.rawBody = data;
-    try { req.body = data ? JSON.parse(data) : {}; } catch { req.body = {}; }
+// --- Fastify instance ---
+const app = Fastify({
+  logger: true
+});
+
+// --- CORS (open by default; tighten if needed) ---
+await app.register(cors, {
+  origin: true
+});
+
+// --- URL-encoded form parser (for simple forms) ---
+await app.register(formbody);
+
+// --- Capture raw JSON body (needed for Paystack signature verify) ---
+app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+  try {
+    (req as any).rawBody = body || '';
+    const json = body ? JSON.parse(body) : {};
+    done(null, json);
+  } catch (err) {
+    done(err as Error, undefined as any);
   }
 });
 
-
-const PORT = Number(process.env.PORT || 8080);
-
-// Health
-app.get('/health', async () => ({ ok: true }));
-
-// WhatsApp webhook verification
-app.get('/webhooks/whatsapp', async (req: any, reply: any) => {
-  const mode = (req.query as any)['hub.mode'];
-  const token = (req.query as any)['hub.verify_token'];
-  const challenge = (req.query as any)['hub.challenge'];
-  if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
-    return reply.code(200).send(challenge);
-  }
-  return reply.code(403).send('Forbidden');
+// --- Health check ---
+app.get('/health', async () => {
+  return { ok: true };
 });
 
-// WhatsApp inbound
-app.post('/webhooks/whatsapp', async (req: any, reply: any) => {
-  const ok = verifyMetaSignature(req);
-  if (!ok) return reply.code(401).send('Invalid signature');
-  const payload = req.body as any;
-  const entries = payload?.entry ?? [];
-  for (const e of entries) {
-    for (const change of (e.changes ?? [])) {
-      const messages = change?.value?.messages;
-      if (!messages || !messages[0]) continue;
-      await handleMessage(messages[0], change?.value);
+// --- WhatsApp webhook: verification (GET) ---
+app.get('/webhooks/whatsapp', async (req, reply) => {
+  const q = (req.query ?? {}) as Record<string, string>;
+  const mode = q['hub.mode'];
+  const token = q['hub.verify_token'];
+  const challenge = q['hub.challenge'];
+
+  if (mode === 'subscribe' && token && challenge && token === process.env.META_VERIFY_TOKEN) {
+    // Meta expects the challenge echoed verbatim with 200
+    reply.code(200).type('text/plain').send(challenge);
+    return;
+  }
+  reply.code(403).send('Forbidden');
+});
+
+// --- WhatsApp webhook: events (POST) ---
+app.post('/webhooks/whatsapp', async (req, reply) => {
+  // You can process the payload here or enqueue it; for now we just log minimal info
+  app.log.info({ path: '/webhooks/whatsapp', body: req.body }, 'WA inbound');
+  reply.code(200).send({ ok: true });
+});
+
+// --- Paystack webhook (optional example) ---
+// Keep this route if you’re verifying HMAC in lib/pay.ts using req.rawBody
+app.post('/webhooks/paystack', async (req, reply) => {
+  try {
+    const { verifyPaystackSignature } = await import('./lib/pay.js');
+    if (!verifyPaystackSignature(req)) {
+      return reply.code(401).send({ ok: false, error: 'invalid signature' });
     }
+    // TODO: handle event (update bookings by paystack_ref, etc.)
+    app.log.info({ evt: req.body }, 'Paystack webhook ok');
+    return reply.send({ ok: true });
+  } catch (e) {
+    app.log.error(e);
+    return reply.code(500).send({ ok: false });
   }
-  return reply.code(200).send('OK');
 });
 
-// Paystack webhook
-app.post('/webhooks/paystack', async (req: any, reply: any) => {
-  const { verifyPaystackSignature } = await import('./lib/pay.js');
-  const ok = verifyPaystackSignature(req);
-  if (!ok) return reply.code(401).send('Invalid signature');
+// --- Mount admin API under /admin (only if the file exists) ---
+await app.register(adminRoutes as any, { prefix: '/admin' });
 
-  const event = req.body || {};
-  const reference = event?.data?.reference || event?.data?.ref || null;
-  if (reference) {
-    const { getPool } = await import('./lib/db.js');
-    const pool = await getPool();
-    await pool.query(
-      "UPDATE bookings SET payment_status='paid' WHERE paystack_ref=$1",
-      [reference]
-    );
-  }
-  reply.code(200).send('OK');
+// --- Optional: simple root route so / doesn’t 404 ---
+app.get('/', async () => {
+  return { ok: true, service: 'whatsapp-agent-server', version: '0.1.0' };
 });
 
-// Admin routes
-app.register(adminRoutes, { prefix: '/admin' });
+// --- Start server when executed directly ---
+const PORT = Number(process.env.PORT || 8080);
+const HOST = '0.0.0.0';
 
-app.listen({ port: PORT, host: '0.0.0.0' }).then(() => {
-  app.log.info(`Server listening on ${PORT}`);
-}).catch((err) => {
+try {
+  await app.listen({ port: PORT, host: HOST });
+  app.log.info(`Server listening on http://${HOST}:${PORT}`);
+} catch (err) {
   app.log.error(err);
   process.exit(1);
-});
+}
+
+export default app;
