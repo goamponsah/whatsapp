@@ -1,0 +1,25 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "services": {
+      "server": {
+        "rootDir": "apps/server",
+        "buildCommand": "npm install && npm run build",
+        "startCommand": "node dist/src/app.js",
+        "envVars": {
+          "NODE_ENV": "production",
+          "PORT": "8080"
+        }
+      },
+      "admin": {
+        "rootDir": "apps/admin",
+        "buildCommand": "npm install && npm run build",
+        "startCommand": "npm run start",
+        "envVars": {
+          "NODE_ENV": "production",
+          "PORT": "3000"
+        }
+      }
+    }
+  }
+}
